@@ -137,7 +137,7 @@ func APIShortHandler(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(body, longURL)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Can't unmarshal JSON"))
+		w.Write([]byte("Can't unmarshal JSON payload"))
 		return
 	}
 
@@ -158,7 +158,7 @@ func APIShortHandler(w http.ResponseWriter, r *http.Request) {
 	respJSON, err := json.Marshal(resp)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Can't marshal as JSON"))
+		w.Write([]byte("Can't marshal response as JSON"))
 		return
 	}
 
