@@ -26,9 +26,8 @@ var (
 	dbBucket       = flag.String("dbbucket", "goshort", "DB `bucket` name")
 )
 
-// Global valiables
+// Global DB connector valiable
 var db *bolt.DB
-var err error
 
 // Request object
 type shortRequest struct {
@@ -61,7 +60,7 @@ func (s *shortRequest) Hash() (string, error) {
 }
 
 // Write to the DB
-func saveToDatabase(db *bolt.DB, key, value string) error {
+func writeToDatabase(db *bolt.DB, key, value string) error {
 	if err := db.Update(func(tx *bolt.Tx) error {
 		// Make sure bucket exists. Create It if not
 		b, err := tx.CreateBucketIfNotExists([]byte(*dbBucket))
@@ -85,7 +84,7 @@ func saveToDatabase(db *bolt.DB, key, value string) error {
 }
 
 // Read from DB by key
-func getFromDatabase(db *bolt.DB, key string) string {
+func readFromDatabase(db *bolt.DB, key string) string {
 	var value string
 
 	if err := db.View(func(tx *bolt.Tx) error {
@@ -105,77 +104,76 @@ func getFromDatabase(db *bolt.DB, key string) string {
 	return value
 }
 
-// GETHandler handles GET HTTP requests
-func GETHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		// Read variables from mux router
-		vars := mux.Vars(r)
+// RedirectHandler handles GET HTTP requests and redirects to longURL
+func RedirectHandler(w http.ResponseWriter, r *http.Request) {
+	// Read variables from mux router
+	vars := mux.Vars(r)
 
-		longURL := getFromDatabase(db, vars["hashID"])
-		if longURL == "" {
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprint(w, "Not Found")
-			return
-		}
-		http.Redirect(w, r, longURL, 301)
+	longURL := readFromDatabase(db, vars["hashID"])
+	if longURL == "" {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "Not Found")
 		return
 	}
+	http.Redirect(w, r, longURL, 301)
+	return
+
 }
 
-// POSTHandler handles POST HTTP requests
-func POSTHandler(w http.ResponseWriter, r *http.Request) {
+// APIShortHandler handles POST HTTP requests
+func APIShortHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	if r.Method == "POST" {
-		// Read JSON payload as binary data
-		body, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			w.Write([]byte("Can't read request body"))
-			return
-		}
-
-		// Unmarshal binary data to the shortRequest object (JSON)
-		longURL := &shortRequest{}
-		err = json.Unmarshal(body, longURL)
-		if err != nil {
-			w.Write([]byte("Can't unmarshal JSON"))
-			return
-		}
-
-		// Hash longURL
-		hash, err := longURL.Hash()
-		if err != nil {
-			w.Write([]byte("Can't hash URL"))
-		}
-
-		// Make short URL based on request
-		shortURL := fmt.Sprintf("%s://%s/%s", *urlScheme, r.Host, hash)
-		resp := shortResponse{
-			ShortURL: shortURL,
-		}
-
-		// Return short URL to user
-		respJSON, err := json.Marshal(resp)
-		if err != nil {
-			w.Write([]byte("Can't marshal as JSON"))
-			return
-		}
-
-		// Save to the DB
-		err = saveToDatabase(db, hash, longURL.LongURL)
-		if err != nil {
-			w.Write([]byte("Can't save to DB"))
-			return
-		}
-
-		w.Write(respJSON)
+	// Read JSON payload as binary data
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.Write([]byte("Can't read request body"))
+		return
 	}
+
+	// Unmarshal binary data to the shortRequest object (JSON)
+	longURL := &shortRequest{}
+	err = json.Unmarshal(body, longURL)
+	if err != nil {
+		w.Write([]byte("Can't unmarshal JSON"))
+		return
+	}
+
+	// Hash longURL
+	hash, err := longURL.Hash()
+	if err != nil {
+		w.Write([]byte("Can't hash URL"))
+	}
+
+	// Make short URL based on request
+	shortURL := fmt.Sprintf("%s://%s/%s", *urlScheme, r.Host, hash)
+	resp := shortResponse{
+		ShortURL: shortURL,
+	}
+
+	// Return short URL to user
+	respJSON, err := json.Marshal(resp)
+	if err != nil {
+		w.Write([]byte("Can't marshal as JSON"))
+		return
+	}
+
+	// Save to the DB
+	err = writeToDatabase(db, hash, longURL.LongURL)
+	if err != nil {
+		w.Write([]byte("Can't save to DB"))
+		return
+	}
+
+	w.Write(respJSON)
 }
 
 func main() {
+	// Parse flags
 	flag.Parse()
 
 	// Open the database.
+	var err error
 	db, err = bolt.Open(*dbFilename, 0666, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -183,8 +181,8 @@ func main() {
 
 	// Handle requests
 	r := mux.NewRouter()
-	r.HandleFunc("/{hashID}", GETHandler)
-	r.HandleFunc(apiShortEndpoint, POSTHandler)
+	r.HandleFunc("/{hashID}", RedirectHandler).Methods("GET")
+	r.HandleFunc(apiShortEndpoint, APIShortHandler).Methods("POST")
 	http.Handle("/", r)
 	log.Fatal(http.ListenAndServe(*listenHostPort, r))
 
