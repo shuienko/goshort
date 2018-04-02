@@ -127,6 +127,7 @@ func APIShortHandler(w http.ResponseWriter, r *http.Request) {
 	// Read JSON payload as binary data
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Can't read request body"))
 		return
 	}
@@ -135,6 +136,7 @@ func APIShortHandler(w http.ResponseWriter, r *http.Request) {
 	longURL := &shortRequest{}
 	err = json.Unmarshal(body, longURL)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Can't unmarshal JSON"))
 		return
 	}
@@ -142,6 +144,7 @@ func APIShortHandler(w http.ResponseWriter, r *http.Request) {
 	// Hash longURL
 	hash, err := longURL.Hash()
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Can't hash URL"))
 	}
 
@@ -154,6 +157,7 @@ func APIShortHandler(w http.ResponseWriter, r *http.Request) {
 	// Return short URL to user
 	respJSON, err := json.Marshal(resp)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Can't marshal as JSON"))
 		return
 	}
@@ -161,6 +165,7 @@ func APIShortHandler(w http.ResponseWriter, r *http.Request) {
 	// Save to the DB
 	err = writeToDatabase(db, hash, longURL.LongURL)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Can't save to DB"))
 		return
 	}
