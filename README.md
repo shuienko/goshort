@@ -37,7 +37,7 @@ Usage of goshort:
 
 ## API
 
-Request boby format: `{ "url": "http://exmple.com" }`
+Request body format: `{ "url": "http://exmple.com" }`
 
 ### Operations
 
